@@ -1,6 +1,6 @@
 # StudyGuide
 
-A native desktop app for drilling the OMSCS 6250 question pools and tracking how you do. Built with Go and Wails v2, and stores its data in a local SQLite database. It runs without a server, an account, or a network connection. See [Studyguideplan.md.md](Studyguideplan.md.md) for the design.
+A native desktop app for drilling the OMSCS 6250 question pools and tracking how you do. Built with Go and Wails v2, and stores its data in a local SQLite database.
 
 ## Prerequisites
 
