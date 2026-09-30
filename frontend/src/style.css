@@ -114,6 +114,21 @@ select {
   margin-bottom: 14px;
 }
 
+.figure-img { margin: 0 0 16px; }
+.figure-img img {
+  display: block;
+  max-width: 100%;
+  max-height: 420px;
+  margin: 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff; /* the slides assume a white page, even in dark mode */
+}
+.figure-img img { cursor: zoom-in; }
+#zoom { width: auto; max-width: 96vw; max-height: 96vh; padding: 0; background: #fff; cursor: zoom-out; overflow: hidden; }
+#zoom img { display: block; max-width: 94vw; max-height: 94vh; }
+.figure-img figcaption { font-size: 12px; color: var(--muted); text-align: center; margin-top: 6px; }
+
 .choices { display: flex; flex-direction: column; gap: 8px; }
 .choice {
   display: flex;

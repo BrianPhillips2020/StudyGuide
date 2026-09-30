@@ -11,6 +11,26 @@ const bar = (correct, total) => total
   : `<span class="muted">not seen</span>`;
 const when = (iso) => new Date(iso).toLocaleString();
 
+// Figure images are served by the Go figureHandler at /figures/{questionID}.
+// Without an image (e.g. a bank imported before figures were supported),
+// fall back to pointing at the PDF page.
+function figureHTML(id, hasImage, caption) {
+  if (!hasImage) {
+    return `<div class="figure">This question refers to a figure: ${esc(caption)}. Reimport the PDFs to show it here.</div>`;
+  }
+  return `<img src="/figures/${id}" alt="${esc(caption)}" title="Click to enlarge">` +
+    `<figcaption>${esc(caption)}</figcaption>`;
+}
+
+// Click any figure to view it full size; click again or press Esc to close.
+document.addEventListener("click", (e) => {
+  if (e.target.matches(".figure-img img")) {
+    $("#zoom-img").src = e.target.src;
+    $("#zoom").showModal();
+  }
+});
+$("#zoom").addEventListener("click", () => $("#zoom").close());
+
 function showError(err) {
   alert(String(err?.message ?? err));
 }
@@ -93,7 +113,7 @@ async function nextQuestion() {
 
   const fig = $("#q-figure");
   fig.hidden = !current.figure;
-  fig.textContent = current.figure ? `This question refers to a figure: ${current.figure}` : "";
+  fig.innerHTML = current.figure ? figureHTML(current.id, current.hasImage, current.figure) : "";
 
   $("#q-prompt").textContent = current.prompt;
 
@@ -238,7 +258,7 @@ async function openHistory(id) {
     `<tr><td>${esc(when(a.answeredAt))}</td><td>${esc(a.answer)}</td>` +
     `<td>${a.correct ? '<span class="ok">right</span>' : '<span class="no">wrong</span>'}</td></tr>`).join("");
   $("#h-body").innerHTML =
-    (q.figure ? `<div class="figure">This question refers to a figure: ${esc(q.figure)}</div>` : "") +
+    (q.figure ? `<figure class="figure-img">${figureHTML(q.id, q.hasImage, q.figure)}</figure>` : "") +
     `<p class="prompt">${esc(q.prompt)}</p><div class="choices">${choices}</div>` +
     `<p class="explanation" style="margin-top:14px">${esc(q.explanation)}</p>` +
     `<h2>Attempts</h2><table class="grid"><thead><tr><th>When</th><th>Answer</th><th>Result</th></tr></thead>` +

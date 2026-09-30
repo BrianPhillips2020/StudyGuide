@@ -22,10 +22,13 @@ type Issue struct {
 	Skipped bool   `json:"skipped"`
 }
 
-// line is one row of PDF text with the page it came from.
+// line is one row of PDF text with the page it came from, or, when image is
+// set, an image drawn at that point in reading order.
 type line struct {
-	text string
-	page int
+	text  string
+	page  int
+	y     float64
+	image string // imageRef of an image draw; text is empty
 }
 
 var (
@@ -41,24 +44,48 @@ var (
 	reModuleSuffix = regexp.MustCompile(`\s*\(Module \d+\)\s*$`)
 )
 
-// ParsePDF reads a "Module N Question Pool" PDF.
+// ParsePDF reads a "Module N Question Pool" PDF, including the figure images.
+// A figure whose image can't be found is imported with its caption only and
+// a warning.
 func ParsePDF(path string) ([]store.Question, []Issue, error) {
-	lines, err := readPDFLines(path)
+	source := filepath.Base(path)
+	lines, issues, err := readPDFLines(path)
 	if err != nil {
 		return nil, nil, err
 	}
-	qs, issues := parseLines(lines, filepath.Base(path))
+	qs, more := parseLines(lines, source)
+	issues = append(issues, more...)
+
+	images, err := extractImages(path)
+	if err != nil {
+		issues = append(issues, Issue{Source: source, Message: fmt.Sprintf("figures not imported: %v", err)})
+		images = nil
+	}
+	for i := range qs {
+		q := &qs[i]
+		if q.Figure == "" {
+			continue
+		}
+		if img := images[q.ImageRef]; img != nil {
+			q.Image = img
+		} else if err == nil {
+			issues = append(issues, Issue{Source: source, Item: q.Key,
+				Message: "figure image not found in the PDF (caption imported only)"})
+		}
+	}
 	return qs, issues, nil
 }
 
-func readPDFLines(path string) ([]line, error) {
+func readPDFLines(path string) ([]line, []Issue, error) {
+	source := filepath.Base(path)
 	f, r, err := pdf.Open(path)
 	if err != nil {
-		return nil, fmt.Errorf("open %s: %w", filepath.Base(path), err)
+		return nil, nil, fmt.Errorf("open %s: %w", source, err)
 	}
 	defer f.Close()
 
 	var out []line
+	var issues []Issue
 	for p := 1; p <= r.NumPage(); p++ {
 		page := r.Page(p)
 		if page.V.IsNull() {
@@ -66,17 +93,23 @@ func readPDFLines(path string) ([]line, error) {
 		}
 		rows, err := page.GetTextByRow()
 		if err != nil {
-			return nil, fmt.Errorf("%s page %d: %w", filepath.Base(path), p, err)
+			return nil, nil, fmt.Errorf("%s page %d: %w", source, p, err)
 		}
+		var pageLines []line
 		for _, row := range rows {
 			var b strings.Builder
 			for _, w := range row.Content {
 				b.WriteString(w.S)
 			}
-			out = append(out, line{text: strings.TrimSpace(b.String()), page: p})
+			pageLines = append(pageLines, line{text: strings.TrimSpace(b.String()), page: p, y: float64(row.Position)})
 		}
+		imgs, err := pageImages(page, p)
+		if err != nil {
+			issues = append(issues, Issue{Source: source, Message: err.Error()})
+		}
+		out = append(out, withImages(pageLines, imgs)...)
 	}
-	return out, nil
+	return out, issues, nil
 }
 
 // draft is a question being assembled line by line.
@@ -86,6 +119,7 @@ type draft struct {
 	prompt, why    []string
 	choices        []store.Choice
 	answer, figure string
+	imageRef       string
 	sawAnswer      bool
 	topic          string
 }
@@ -94,6 +128,10 @@ type draft struct {
 // font information, so topic headings are recognized by position: a line
 // after a blank line, not ending in a period or comma, directly followed
 // by a "Qn. [TYPE]" marker.
+//
+// Each figure image is drawn just above its "Figure:" caption, sometimes at
+// the bottom of the previous page, so a caption takes the most recent image
+// that no caption has claimed yet.
 func parseLines(lines []line, source string) ([]store.Question, []Issue) {
 	var (
 		drafts  []*draft
@@ -103,6 +141,7 @@ func parseLines(lines []line, source string) ([]store.Question, []Issue) {
 		topic   string
 		cur     *draft
 		section string // which part of cur the next wrapped line continues
+		image   string // most recent unclaimed image draw
 	)
 
 	finish := func() {
@@ -113,6 +152,10 @@ func parseLines(lines []line, source string) ([]store.Question, []Issue) {
 	}
 
 	for i, l := range lines {
+		if l.image != "" {
+			image = l.image
+			continue
+		}
 		t := l.text
 		if t == "" {
 			continue
@@ -144,6 +187,7 @@ func parseLines(lines []line, source string) ([]store.Question, []Issue) {
 		case m.kind == "figure":
 			caption := reModuleSuffix.ReplaceAllString(m.val, "")
 			cur.figure = fmt.Sprintf("%s (%s, page %d)", caption, source, l.page)
+			cur.imageRef, image = image, ""
 		case m.kind == "answer":
 			cur.answer, cur.sawAnswer = m.val, true
 			section = ""
@@ -256,6 +300,7 @@ func (d *draft) build(module, lesson, source string, promptWrap, whyWrap int) (s
 		Answer:      d.answer,
 		Explanation: paragraphs(d.why, whyWrap),
 		Figure:      d.figure,
+		ImageRef:    d.imageRef,
 		Source:      fmt.Sprintf("%s, page %d", source, d.page),
 	}
 	if q.Topic == "" {

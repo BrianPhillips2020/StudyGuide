@@ -2,8 +2,13 @@ package main
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
+	"net/http"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -64,6 +69,7 @@ type QuestionView struct {
 	Prompt   string         `json:"prompt"`
 	Choices  []store.Choice `json:"choices"`
 	Figure   string         `json:"figure"`
+	HasImage bool           `json:"hasImage"` // served at /figures/{id}
 	Source   string         `json:"source"`
 	Attempts int            `json:"attempts"`
 	Pool     int            `json:"pool"` // questions matching the filter
@@ -90,7 +96,7 @@ func (a *App) NextQuestion(f Filter) (*QuestionView, error) {
 	}
 	a.lastID = id
 	v := &QuestionView{ID: q.ID, Key: q.Key, Module: q.Module, Topic: q.Topic, Kind: q.Kind,
-		Prompt: q.Prompt, Choices: q.Choices, Figure: q.Figure, Source: q.Source, Pool: len(cands)}
+		Prompt: q.Prompt, Choices: q.Choices, Figure: q.Figure, HasImage: q.HasImage, Source: q.Source, Pool: len(cands)}
 	for _, c := range cands {
 		if c.ID == id {
 			v.Attempts = c.Attempts
@@ -214,6 +220,36 @@ func (a *App) ImportBank() (*ImportResult, error) {
 		}
 	}
 	return res, nil
+}
+
+// figureHandler serves /figures/{questionID} from the database. The Wails
+// asset server passes it any request that isn't an embedded frontend file.
+// It is a separate type so ServeHTTP isn't bound to the frontend as an App method.
+type figureHandler struct{ app *App }
+
+func (h figureHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	idStr, ok := strings.CutPrefix(r.URL.Path, "/figures/")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if !ok || err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	s, err := h.app.db()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	fig, err := s.FigureImage(id)
+	if errors.Is(err, sql.ErrNoRows) {
+		http.NotFound(w, r)
+		return
+	} else if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", fig.Mime)
+	w.Header().Set("Cache-Control", "no-cache") // a reimport can replace the image
+	w.Write(fig.Data)
 }
 
 // Info returns where the database lives, for the Import view.

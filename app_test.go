@@ -1,7 +1,10 @@
 package main
 
 import (
+	"fmt"
+	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"studyguide/internal/bank"
@@ -71,4 +74,29 @@ func TestEndToEnd(t *testing.T) {
 	if err != nil || st.Attempts != 3 || st.MissedNow != 2 || st.TotalQuestions != added {
 		t.Errorf("stats after reimport: %+v %v", st, err)
 	}
+
+	// Every figure question should serve its image; others should 404.
+	h := figureHandler{a}
+	withImage := 0
+	for id := int64(1); id <= int64(added); id++ {
+		q, err := s.Question(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest("GET", fmt.Sprintf("/figures/%d", id), nil))
+		if q.HasImage {
+			withImage++
+			ct := rec.Header().Get("Content-Type")
+			if rec.Code != 200 || !strings.HasPrefix(ct, "image/") || rec.Body.Len() == 0 {
+				t.Errorf("%s: figure served %d %q (%d bytes)", q.Key, rec.Code, ct, rec.Body.Len())
+			}
+		} else if rec.Code != 404 {
+			t.Errorf("%s: no figure but got %d", q.Key, rec.Code)
+		}
+		if (q.Figure != "") != q.HasImage {
+			t.Errorf("%s: caption %q but HasImage=%v", q.Key, q.Figure, q.HasImage)
+		}
+	}
+	t.Logf("%d questions serve a figure image", withImage)
 }

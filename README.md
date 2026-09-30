@@ -33,7 +33,7 @@ If `wails build` complains about npm, add `-s` to skip the (empty) frontend buil
 - The PDFs are parsed directly. Topics come from the section headings, and each question is keyed by module and number (`M1-Q9`), so importing again updates the text but keeps your history.
 - Items with a missing answer, too few choices, or an answer that isn't one of the choices are listed and skipped, not guessed at. The current pools (226 questions) import with no issues.
 - JSON banks in the format from the plan are also accepted. Optional `id`, `module`, and `kind` fields are supported.
-- Figures are not extracted. A question that refers to a figure shows its caption along with the PDF file and page to look at.
+- Figure images are pulled out of the PDFs and stored in the database, then shown above the question. Click a figure to enlarge it. Each `Figure:` caption is paired with the image drawn just above it in reading order, even when the image is at the bottom of the previous page. All 87 figures in the current pools are matched.
 
 ## Layout
 
@@ -42,7 +42,7 @@ main.go              Wails entry point, embeds frontend/src
 app.go               App struct: NextQuestion, SubmitAnswer, GetStats, ImportBank, …
 internal/store/      SQLite schema, queries, stats
 internal/quiz/       question selection and grading
-internal/bank/       PDF and JSON parsers
+internal/bank/       PDF and JSON parsers, figure extraction
 frontend/src/        index.html, style.css, app.js
 ```
 

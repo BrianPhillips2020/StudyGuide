@@ -12,7 +12,7 @@ func TestParseQuestionPools(t *testing.T) {
 	if len(files) == 0 {
 		t.Skip("no question pool PDFs found")
 	}
-	total := 0
+	total, figures := 0, 0
 	for _, f := range files {
 		qs, issues, err := ParsePDF(f)
 		if err != nil {
@@ -30,6 +30,16 @@ func TestParseQuestionPools(t *testing.T) {
 			if q.Topic == "General" {
 				t.Errorf("%s has no topic heading", q.Key)
 			}
+			if q.Figure != "" {
+				figures++
+				if q.Image == nil || len(q.Image.Data) == 0 {
+					t.Errorf("%s has a figure caption but no image", q.Key)
+				} else if dir := os.Getenv("DUMP_FIGURES"); dir != "" {
+					ext := map[string]string{"image/jpeg": ".jpg", "image/png": ".png"}[q.Image.Mime]
+					os.WriteFile(filepath.Join(dir, q.Key+ext), q.Image.Data, 0o644)
+					t.Logf("%s <- %s: %s", q.Key, q.ImageRef, q.Figure)
+				}
+			}
 		}
 		total += len(qs)
 		if testing.Verbose() && len(qs) > 1 {
@@ -44,7 +54,7 @@ func TestParseQuestionPools(t *testing.T) {
 			}
 		}
 	}
-	t.Logf("parsed %d questions from %d files", total, len(files))
+	t.Logf("parsed %d questions (%d with figures) from %d files", total, figures, len(files))
 }
 
 func TestParseJSON(t *testing.T) {

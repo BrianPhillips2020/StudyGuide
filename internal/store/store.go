@@ -43,6 +43,12 @@ CREATE TABLE IF NOT EXISTS attempts (
 );
 
 CREATE INDEX IF NOT EXISTS attempts_question ON attempts(question_id, id);
+
+CREATE TABLE IF NOT EXISTS figures (
+	question_id INTEGER PRIMARY KEY REFERENCES questions(id) ON DELETE CASCADE,
+	mime        TEXT NOT NULL,
+	data        BLOB NOT NULL
+);
 `
 
 // Store wraps the SQLite connection.
@@ -99,8 +105,19 @@ type Question struct {
 	Choices     []Choice `json:"choices"`
 	Answer      string   `json:"answer"`
 	Explanation string   `json:"explanation"`
-	Figure      string   `json:"figure"`
+	Figure      string   `json:"figure"` // caption, if the question has a figure
+	HasImage    bool     `json:"hasImage"`
 	Source      string   `json:"source"`
+
+	// Set by the importer only; the image bytes are served separately.
+	Image    *Figure `json:"-"`
+	ImageRef string  `json:"-"`
+}
+
+// Figure is a question's figure image.
+type Figure struct {
+	Mime string
+	Data []byte
 }
 
 // UpsertQuestions inserts or updates questions by Key in one transaction.
@@ -148,6 +165,15 @@ func (s *Store) UpsertQuestions(qs []Question) (added, updated int, err error) {
 				return 0, 0, err
 			}
 		}
+		if q.Image != nil {
+			_, err = tx.Exec(`INSERT OR REPLACE INTO figures (question_id, mime, data) VALUES (?, ?, ?)`,
+				id, q.Image.Mime, q.Image.Data)
+		} else {
+			_, err = tx.Exec(`DELETE FROM figures WHERE question_id = ?`, id)
+		}
+		if err != nil {
+			return 0, 0, err
+		}
 	}
 	return added, updated, tx.Commit()
 }
@@ -155,9 +181,10 @@ func (s *Store) UpsertQuestions(qs []Question) (added, updated int, err error) {
 // Question loads one question with its choices.
 func (s *Store) Question(id int64) (Question, error) {
 	var q Question
-	err := s.db.QueryRow(`SELECT id, key, module, topic, kind, prompt, answer, explanation, figure, source
+	err := s.db.QueryRow(`SELECT id, key, module, topic, kind, prompt, answer, explanation, figure, source,
+			EXISTS (SELECT 1 FROM figures WHERE question_id = questions.id)
 		FROM questions WHERE id = ?`, id).
-		Scan(&q.ID, &q.Key, &q.Module, &q.Topic, &q.Kind, &q.Prompt, &q.Answer, &q.Explanation, &q.Figure, &q.Source)
+		Scan(&q.ID, &q.Key, &q.Module, &q.Topic, &q.Kind, &q.Prompt, &q.Answer, &q.Explanation, &q.Figure, &q.Source, &q.HasImage)
 	if err != nil {
 		return q, err
 	}
@@ -174,6 +201,13 @@ func (s *Store) Question(id int64) (Question, error) {
 		q.Choices = append(q.Choices, c)
 	}
 	return q, rows.Err()
+}
+
+// FigureImage returns a question's figure image, or sql.ErrNoRows.
+func (s *Store) FigureImage(questionID int64) (Figure, error) {
+	var f Figure
+	err := s.db.QueryRow(`SELECT mime, data FROM figures WHERE question_id = ?`, questionID).Scan(&f.Mime, &f.Data)
+	return f, err
 }
 
 // Candidate is a question id with how often it has been attempted, used by
