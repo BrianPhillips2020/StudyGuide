@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Study Guide</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>Study Guide</h1>
+    <nav>
+      <button class="tab active" data-view="study">Study</button>
+      <button class="tab" data-view="stats">Stats</button>
+      <button class="tab" data-view="import">Import</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- Study -->
+    <section id="view-study" class="view active">
+      <div class="filters">
+        <label>Questions
+          <select id="f-mode">
+            <option value="all">All</option>
+            <option value="missed">Missed only</option>
+          </select>
+        </label>
+        <label>Module
+          <select id="f-module"><option value="">All modules</option></select>
+        </label>
+        <label>Topic
+          <select id="f-topic"><option value="">All topics</option></select>
+        </label>
+        <span id="pool" class="muted"></span>
+      </div>
+
+      <div id="study-empty" class="empty" hidden></div>
+
+      <article id="card" class="card" hidden>
+        <div id="q-meta" class="meta"></div>
+        <div id="q-figure" class="figure" hidden></div>
+        <p id="q-prompt" class="prompt"></p>
+        <div id="q-choices" class="choices"></div>
+        <div id="feedback" class="feedback" hidden>
+          <div id="fb-verdict" class="verdict"></div>
+          <p id="fb-explanation" class="explanation"></p>
+          <div id="fb-history" class="muted"></div>
+        </div>
+        <div class="actions">
+          <span class="muted keys">Keys: A–D / T F to choose, Enter to submit or continue</span>
+          <button id="btn-submit" class="primary" disabled>Submit</button>
+          <button id="btn-next" class="primary" hidden>Next question</button>
+        </div>
+      </article>
+    </section>
+
+    <!-- Stats -->
+    <section id="view-stats" class="view">
+      <div id="tiles" class="tiles"></div>
+
+      <h2>Accuracy by topic</h2>
+      <table class="grid" id="topic-table">
+        <thead><tr><th>Topic</th><th class="num">Seen</th><th class="num">Attempts</th><th>Accuracy</th></tr></thead>
+        <tbody></tbody>
+      </table>
+
+      <h2>Most missed</h2>
+      <p class="muted">Click a question to see its full history.</p>
+      <table class="grid clickable" id="missed-table">
+        <thead><tr><th>Question</th><th>Topic</th><th class="num">Wrong</th><th class="num">Attempts</th><th>Last</th></tr></thead>
+        <tbody></tbody>
+      </table>
+
+      <h2>By day</h2>
+      <table class="grid" id="daily-table">
+        <thead><tr><th>Day</th><th class="num">Attempts</th><th>Accuracy</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <!-- Import -->
+    <section id="view-import" class="view">
+      <h2>Import question bank</h2>
+      <p>Choose one or more <strong>Module N Question Pool.pdf</strong> files, or a JSON bank. Questions are matched by
+        module and number (e.g. <code>M1-Q9</code>), so importing again updates the text but keeps your answer history.</p>
+      <p>Anything that can't be parsed cleanly, such as a missing answer or an answer that isn't one of the choices, is listed below and skipped, not guessed at.</p>
+      <button id="btn-import" class="primary">Choose files…</button>
+      <div id="import-result"></div>
+      <p class="muted small">Database: <code id="db-path"></code></p>
+    </section>
+  </main>
+
+  <!-- Per-question history -->
+  <dialog id="history">
+    <div class="dialog-head">
+      <strong id="h-title"></strong>
+      <button id="h-close" class="ghost" aria-label="Close">✕</button>
+    </div>
+    <div id="h-body"></div>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>

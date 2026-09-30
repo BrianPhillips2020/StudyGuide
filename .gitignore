@@ -1,0 +1,7 @@
+# Wails build output and generated JS bindings (the frontend calls window.go directly)
+build/bin/
+frontend/wailsjs/
+
+*.db
+*.db-wal
+*.db-shm

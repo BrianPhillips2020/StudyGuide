@@ -1,0 +1,10 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "studyguide",
+  "outputfilename": "studyguide",
+  "frontend:dir": "frontend",
+  "frontend:install": "",
+  "frontend:build": "",
+  "assetdir": "frontend/src",
+  "wailsjsdir": "./frontend"
+}
