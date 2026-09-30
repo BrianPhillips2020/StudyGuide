@@ -31,6 +31,15 @@ document.addEventListener("click", (e) => {
 });
 $("#zoom").addEventListener("click", () => $("#zoom").close());
 
+// Fisher–Yates shuffle, in place.
+function shuffle(a) {
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 function showError(err) {
   alert(String(err?.message ?? err));
 }
@@ -119,11 +128,19 @@ async function nextQuestion() {
 
   const box = $("#q-choices");
   box.innerHTML = "";
+  // Multiple-choice options are shuffled every time and relabeled A, B, C…
+  // in display order. c.label stays the bank's letter, which is what gets
+  // graded and recorded; c.shown is the letter on screen.
+  if (current.kind === "MCQ") shuffle(current.choices);
+  current.choices.forEach((c, i) => {
+    c.shown = current.kind === "MCQ" ? String.fromCharCode(65 + i) : c.label;
+  });
+
   for (const c of current.choices) {
     const b = document.createElement("button");
     b.className = "choice" + (current.kind === "TF" ? " tf" : "");
     b.dataset.label = c.label;
-    b.innerHTML = `<span class="label">${esc(c.label)}</span><span>${esc(c.text)}</span>`;
+    b.innerHTML = `<span class="label">${esc(c.shown)}</span><span>${esc(c.text)}</span>`;
     b.addEventListener("click", () => choose(c.label));
     box.appendChild(b);
   }
@@ -160,7 +177,8 @@ async function submit() {
 
   const v = $("#fb-verdict");
   v.className = "verdict " + (res.correct ? "good" : "bad");
-  v.textContent = res.correct ? "Correct" : `Incorrect. The answer is ${res.answer}.`;
+  const correctChoice = current.choices.find((c) => c.label === res.answer);
+  v.textContent = res.correct ? "Correct" : `Incorrect. The answer is ${correctChoice ? correctChoice.shown : res.answer}.`;
   $("#fb-explanation").textContent = res.explanation;
 
   const h = res.history ?? [];
@@ -190,10 +208,15 @@ document.addEventListener("keydown", (e) => {
   }
   if (answered) return;
   if (current.kind === "TF" && (k === "T" || k === "F")) choose(k === "T" ? "True" : "False");
-  else if (current.choices.some((c) => c.label === k)) choose(k);
+  else {
+    const c = current.choices.find((c) => c.shown === k);
+    if (c) choose(c.label);
+  }
 });
 
 /* ---------- Stats ---------- */
+
+const expandedModules = new Set();
 
 async function loadStats() {
   let s;
@@ -211,22 +234,33 @@ async function loadStats() {
     [`${s.currentStreak}`, `Current streak (best ${s.bestStreak})`],
   ].map(([v, l]) => `<div class="tile"><div class="value">${esc(v)}</div><div class="label">${esc(l)}</div></div>`).join("");
 
-  // Topics grouped under a module row with module totals.
+  // Each module is a collapsible row with module totals; its topics show
+  // when it is expanded. Expanded modules stay open across reloads.
   const rows = [];
-  let mod = null;
-  for (const t of s.topics ?? []) {
-    if (t.module !== mod) {
-      mod = t.module;
-      const all = s.topics.filter((x) => x.module === mod);
-      const sum = (f) => all.reduce((n, x) => n + x[f], 0);
-      rows.push(`<tr class="module"><td>${esc(mod)}</td><td class="num">${sum("seen")}/${sum("questions")}</td>` +
-        `<td class="num">${sum("attempts")}</td><td>${bar(sum("correct"), sum("attempts"))}</td></tr>`);
+  const modules = [...new Set((s.topics ?? []).map((t) => t.module))];
+  modules.forEach((mod, i) => {
+    const all = s.topics.filter((x) => x.module === mod);
+    const sum = (f) => all.reduce((n, x) => n + x[f], 0);
+    const open = expandedModules.has(mod);
+    rows.push(`<tr class="module${open ? " open" : ""}" data-idx="${i}">` +
+      `<td><span class="caret">▸</span>${esc(mod)}</td><td class="num">${sum("seen")}/${sum("questions")}</td>` +
+      `<td class="num">${sum("attempts")}</td><td>${bar(sum("correct"), sum("attempts"))}</td></tr>`);
+    for (const t of all) {
+      rows.push(`<tr class="topic-row" data-idx="${i}"${open ? "" : " hidden"}><td class="indent">${esc(t.topic)}</td>` +
+        `<td class="num">${t.seen}/${t.questions}</td>` +
+        `<td class="num">${t.attempts}</td><td>${bar(t.correct, t.attempts)}</td></tr>`);
     }
-    rows.push(`<tr><td>${esc(t.topic)}</td><td class="num">${t.seen}/${t.questions}</td>` +
-      `<td class="num">${t.attempts}</td><td>${bar(t.correct, t.attempts)}</td></tr>`);
-  }
-  $("#topic-table tbody").innerHTML = rows.join("") ||
+  });
+  const tbody = $("#topic-table tbody");
+  tbody.innerHTML = rows.join("") ||
     `<tr><td colspan="4" class="muted">No questions imported yet.</td></tr>`;
+  tbody.querySelectorAll("tr.module").forEach((tr) => tr.addEventListener("click", () => {
+    const mod = modules[tr.dataset.idx];
+    const open = !expandedModules.has(mod);
+    open ? expandedModules.add(mod) : expandedModules.delete(mod);
+    tr.classList.toggle("open", open);
+    tbody.querySelectorAll(`tr.topic-row[data-idx="${tr.dataset.idx}"]`).forEach((r) => (r.hidden = !open));
+  }));
 
   const missed = s.mostMissed ?? [];
   $("#missed-table tbody").innerHTML = missed.map((m) =>
@@ -251,11 +285,13 @@ async function openHistory(id) {
   }
   const q = h.question;
   $("#h-title").textContent = `${q.key} · ${q.topic}`;
+  // Choices are shuffled and relabeled while studying, so the bank's letters
+  // mean nothing to the user here; show answer text only.
   const choices = (q.choices ?? []).map((c) =>
-    `<div class="choice ${c.label === q.answer ? "correct" : ""} ${q.kind === "TF" ? "tf" : ""}">` +
-    `<span class="label">${esc(c.label)}</span><span>${esc(c.text)}</span></div>`).join("");
+    `<div class="choice tf ${c.label === q.answer ? "correct" : ""}"><span>${esc(c.text)}</span></div>`).join("");
+  const answerText = (label) => (q.choices ?? []).find((c) => c.label === label)?.text ?? label;
   const attempts = (h.attempts ?? []).map((a) =>
-    `<tr><td>${esc(when(a.answeredAt))}</td><td>${esc(a.answer)}</td>` +
+    `<tr><td>${esc(when(a.answeredAt))}</td><td>${esc(answerText(a.answer))}</td>` +
     `<td>${a.correct ? '<span class="ok">right</span>' : '<span class="no">wrong</span>'}</td></tr>`).join("");
   $("#h-body").innerHTML =
     (q.figure ? `<figure class="figure-img">${figureHTML(q.id, q.hasImage, q.figure)}</figure>` : "") +

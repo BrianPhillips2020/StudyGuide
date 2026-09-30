@@ -178,6 +178,11 @@ table.grid {
 .grid tr:last-child td { border-bottom: none; }
 .grid .num { text-align: right; font-variant-numeric: tabular-nums; }
 .grid tr.module td { background: var(--bg); font-weight: 600; }
+.grid tr.module { cursor: pointer; user-select: none; }
+.grid tr.module:hover td { background: var(--border); }
+.grid .caret { display: inline-block; width: 1.1em; color: var(--muted); transition: transform 0.15s; }
+.grid tr.module.open .caret { transform: rotate(90deg); }
+.grid td.indent { padding-left: 32px; }
 .grid.clickable tbody tr { cursor: pointer; }
 .grid.clickable tbody tr:hover td { background: var(--bg); }
 .grid .prompt-cell { max-width: 380px; }
