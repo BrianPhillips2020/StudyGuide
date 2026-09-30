@@ -47,3 +47,6 @@ frontend/src/        index.html, style.css, app.js
 ```
 
 The database is at `%AppData%\StudyGuide\studyguide.db` (it's under `os.UserConfigDir()` on each OS).
+
+### AI USE DISCLAIMER
+This entire project was generated with Claude Opus 5.5. No data is collected from this apps usage.
