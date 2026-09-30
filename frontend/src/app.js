@@ -54,6 +54,148 @@ function showView(name) {
   document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.view === name));
   document.querySelectorAll(".view").forEach((v) => v.classList.toggle("active", v.id === `view-${name}`));
   if (name === "stats") loadStats();
+  if (name === "questions" && questionsStale) loadQuestionList();
+  if (name === "settings") loadSettings();
+}
+
+/* ---------- Settings ---------- */
+
+// confirmAction shows an in-app confirmation and resolves true if the user
+// clicks the action button.
+function confirmAction(message, action) {
+  const dlg = $("#confirm");
+  $("#confirm-msg").textContent = message;
+  $("#confirm-ok").textContent = action;
+  return new Promise((resolve) => {
+    const done = (ok) => { dlg.close(); resolve(ok); };
+    dlg.querySelector(".cancel").onclick = () => done(false);
+    $("#confirm-ok").onclick = () => done(true);
+    dlg.oncancel = () => resolve(false); // Esc
+    dlg.showModal();
+    dlg.querySelector(".cancel").focus(); // Enter shouldn't delete anything
+  });
+}
+
+async function loadSettings() {
+  const byModule = new Map();
+  for (const t of topics) byModule.set(t.module, (byModule.get(t.module) ?? 0) + t.count);
+  const tbody = $("#module-table tbody");
+  tbody.innerHTML = [...byModule].map(([mod, n], i) =>
+    `<tr><td>${esc(mod)}</td><td class="num">${n}</td>` +
+    `<td class="num"><button class="danger small" data-idx="${i}">Remove</button></td></tr>`).join("") ||
+    `<tr><td colspan="3" class="muted">No modules imported.</td></tr>`;
+  const modules = [...byModule.keys()];
+  tbody.querySelectorAll("button[data-idx]").forEach((b) => b.addEventListener("click", async () => {
+    const mod = modules[b.dataset.idx];
+    if (!(await confirmAction(`Remove "${mod}"? Its ${byModule.get(mod)} questions, figures and answer history will be deleted.`, "Remove module"))) return;
+    try {
+      await api().RemoveModule(mod);
+    } catch (err) {
+      return showError(err);
+    }
+    await afterDataChange();
+  }));
+}
+
+// afterDataChange refreshes every view that depends on the bank or history.
+async function afterDataChange() {
+  questionsStale = true;
+  await loadTopics();
+  current = null;
+  await nextQuestion();
+  await loadSettings();
+}
+
+$("#btn-reset-stats").addEventListener("click", async () => {
+  if (!(await confirmAction("Delete your entire answer history? Every attempt, streak and accuracy figure will be erased. Questions are kept.", "Reset all stats"))) return;
+  try {
+    await api().ResetStats();
+  } catch (err) {
+    return showError(err);
+  }
+  await afterDataChange();
+});
+
+$("#btn-hard-reset").addEventListener("click", async () => {
+  if (!(await confirmAction("Delete everything? All modules, questions, figures and answer history will be erased. This cannot be undone.", "Delete everything"))) return;
+  try {
+    await api().HardReset();
+  } catch (err) {
+    return showError(err);
+  }
+  await afterDataChange();
+});
+
+/* ---------- Questions ---------- */
+
+const PREVIEW_CHARS = 60;  // how much of each prompt the list shows
+let questionsStale = true; // reload the list on next visit (set after an import)
+
+async function loadQuestionList() {
+  let qs;
+  try {
+    qs = (await api().ListQuestions()) ?? [];
+  } catch (err) {
+    return showError(err);
+  }
+  questionsStale = false;
+  const box = $("#q-list");
+  if (qs.length === 0) {
+    box.innerHTML = `<div class="empty">No questions imported yet.</div>`;
+    return;
+  }
+
+  const modules = [...new Set(qs.map((q) => q.module))];
+  box.innerHTML = modules.map((mod) => {
+    const list = qs.filter((q) => q.module === mod);
+    const items = list.map((q) => {
+      const num = q.key.match(/-(Q\d+)$/)?.[1] ?? q.key;
+      const flat = q.prompt.replace(/\s+/g, " ");
+      const preview = flat.length > PREVIEW_CHARS ? flat.slice(0, PREVIEW_CHARS).trimEnd() + "…" : flat;
+      return `<details class="q-item" data-id="${q.id}">` +
+        `<summary><span class="q-num">${esc(num)}</span><span class="q-preview">${esc(preview)}</span></summary>` +
+        `<div class="q-detail muted">Loading…</div></details>`;
+    }).join("");
+    return `<details class="q-module"><summary>${esc(mod)} <span class="muted">(${list.length})</span></summary>${items}</details>`;
+  }).join("");
+
+  box.querySelectorAll("details.q-item").forEach((d) =>
+    d.addEventListener("toggle", () => { if (d.open && !d.dataset.loaded) showQuestionDetail(d); }));
+}
+
+async function showQuestionDetail(d) {
+  const body = d.querySelector(".q-detail");
+  let h;
+  try {
+    h = await api().GetQuestionHistory(Number(d.dataset.id));
+  } catch (err) {
+    body.textContent = String(err?.message ?? err);
+    return;
+  }
+  d.dataset.loaded = "1";
+  const q = h.question;
+  const tries = h.attempts ?? [];
+  const right = tries.filter((a) => a.correct).length;
+  const choices = (q.choices ?? []).map((c) =>
+    `<div class="choice static ${q.kind === "TF" ? "tf" : ""}" data-label="${esc(c.label)}">` +
+    `<span class="label">${esc(c.label)}</span><span>${esc(c.text)}</span></div>`).join("");
+
+  body.className = "q-detail";
+  body.innerHTML =
+    `<div class="meta">${esc(q.topic)} · ${tries.length ? `answered ${tries.length}×, ${right} correct` : "not answered yet"}</div>` +
+    (q.figure ? `<figure class="figure-img">${figureHTML(q.id, q.hasImage, q.figure)}</figure>` : "") +
+    `<p class="prompt">${esc(q.prompt)}</p><div class="choices">${choices}</div>` +
+    `<div class="reveal"><button class="show-answer">Show answer</button></div>` +
+    `<div class="answer-box" hidden><p class="explanation">${esc(q.explanation)}</p></div>`;
+
+  // One button toggles between showing and hiding the answer.
+  const btn = body.querySelector(".show-answer");
+  btn.addEventListener("click", () => {
+    const show = body.querySelector(".answer-box").hidden;
+    body.querySelectorAll(".choice").forEach((c) => c.classList.toggle("correct", show && c.dataset.label === q.answer));
+    body.querySelector(".answer-box").hidden = !show;
+    btn.textContent = show ? "Hide answer" : "Show answer";
+  });
 }
 
 /* ---------- Study ---------- */
@@ -326,6 +468,7 @@ $("#btn-import").addEventListener("click", async () => {
       ? `<table class="grid"><thead><tr><th>File</th><th>Item</th><th>Problem</th><th></th></tr></thead><tbody>${issues}</tbody></table>`
       : `<p class="muted">No problems found.</p>`);
 
+  questionsStale = true;
   await loadTopics();
   if (!current) nextQuestion();
 });

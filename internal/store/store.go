@@ -255,6 +255,68 @@ func (s *Store) RecordAttempt(questionID int64, answer string, correct bool, at 
 	return err
 }
 
+// ResetStats deletes every attempt, keeping the question bank.
+func (s *Store) ResetStats() error {
+	_, err := s.db.Exec(`DELETE FROM attempts`)
+	return err
+}
+
+// RemoveModule deletes a module's questions; their choices, figures and
+// attempts go with them (ON DELETE CASCADE). It returns how many questions
+// were removed.
+func (s *Store) RemoveModule(module string) (int, error) {
+	res, err := s.db.Exec(`DELETE FROM questions WHERE module = ?`, module)
+	if err != nil {
+		return 0, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	return int(n), s.compact()
+}
+
+// HardReset deletes all questions, figures and attempts.
+func (s *Store) HardReset() error {
+	if _, err := s.db.Exec(`DELETE FROM questions; DELETE FROM attempts;`); err != nil {
+		return err
+	}
+	return s.compact()
+}
+
+// compact returns the space freed by deleted figure images to the OS.
+func (s *Store) compact() error {
+	_, err := s.db.Exec(`VACUUM`)
+	return err
+}
+
+// QuestionSummary is a question as listed in the Questions view.
+type QuestionSummary struct {
+	ID     int64  `json:"id"`
+	Key    string `json:"key"`
+	Module string `json:"module"`
+	Topic  string `json:"topic"`
+	Prompt string `json:"prompt"`
+}
+
+// ListQuestions returns every question grouped by module, in bank order.
+func (s *Store) ListQuestions() ([]QuestionSummary, error) {
+	rows, err := s.db.Query(`SELECT id, key, module, topic, prompt FROM questions ORDER BY module, id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []QuestionSummary{}
+	for rows.Next() {
+		var q QuestionSummary
+		if err := rows.Scan(&q.ID, &q.Key, &q.Module, &q.Topic, &q.Prompt); err != nil {
+			return nil, err
+		}
+		out = append(out, q)
+	}
+	return out, rows.Err()
+}
+
 // Topic is one module/topic pair, for building filters.
 type Topic struct {
 	Module string `json:"module"`

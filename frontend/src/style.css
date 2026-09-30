@@ -194,6 +194,58 @@ table.grid {
 .ok { color: var(--good); }
 .no { color: var(--bad); }
 
+/* Questions */
+.q-module {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+.q-module > summary {
+  padding: 12px 16px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+.q-module[open] > summary { border-bottom: 1px solid var(--border); background: var(--bg); }
+.q-item { border-bottom: 1px solid var(--border); }
+.q-item:last-child { border-bottom: none; }
+.q-item > summary {
+  display: flex;
+  gap: 12px;
+  padding: 8px 16px;
+  cursor: pointer;
+  list-style: none;
+}
+.q-item > summary::-webkit-details-marker { display: none; }
+.q-item > summary:hover { background: var(--bg); }
+.q-item[open] > summary { background: var(--bg); font-weight: 600; }
+.q-num { min-width: 3em; font-weight: 600; color: var(--accent); font-variant-numeric: tabular-nums; }
+.q-preview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.q-detail { padding: 14px 20px 18px 20px; }
+.choice.static { cursor: default; }
+.reveal { margin-top: 14px; }
+.answer-box { margin-top: 14px; }
+
+/* Settings */
+button.danger { background: var(--bad); border-color: var(--bad); color: #fff; font-weight: 600; }
+button.danger.small { padding: 3px 10px; font-size: 13px; }
+.setting {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+}
+.setting p { margin: 0; flex: 1; }
+.setting button { flex-shrink: 0; }
+#confirm { width: min(440px, 92vw); }
+#confirm p { margin: 0 0 18px; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 10px; }
+
 /* Import */
 #import-result { margin: 16px 0; }
 .summary { font-weight: 600; margin-bottom: 8px; }

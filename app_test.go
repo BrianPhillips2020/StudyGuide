@@ -75,6 +75,11 @@ func TestEndToEnd(t *testing.T) {
 		t.Errorf("stats after reimport: %+v %v", st, err)
 	}
 
+	list, err := a.ListQuestions()
+	if err != nil || len(list) != added || list[0].Key != "M1-Q1" || list[1].Key != "M1-Q2" {
+		t.Errorf("ListQuestions: %d items, first %+v, err %v", len(list), list[:min(2, len(list))], err)
+	}
+
 	// Every figure question should serve its image; others should 404.
 	h := figureHandler{a}
 	withImage := 0

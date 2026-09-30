@@ -11,8 +11,10 @@
     <h1>Study Guide</h1>
     <nav>
       <button class="tab active" data-view="study">Study</button>
+      <button class="tab" data-view="questions">Questions</button>
       <button class="tab" data-view="stats">Stats</button>
       <button class="tab" data-view="import">Import</button>
+      <button class="tab" data-view="settings">Settings</button>
     </nav>
   </header>
 
@@ -55,6 +57,12 @@
       </article>
     </section>
 
+    <!-- Questions -->
+    <section id="view-questions" class="view">
+      <p class="muted">Click a module to list its questions, then click a question to see it in full.</p>
+      <div id="q-list"></div>
+    </section>
+
     <!-- Stats -->
     <section id="view-stats" class="view">
       <div id="tiles" class="tiles"></div>
@@ -89,7 +97,38 @@
       <div id="import-result"></div>
       <p class="muted small">Database: <code id="db-path"></code></p>
     </section>
+
+    <!-- Settings -->
+    <section id="view-settings" class="view">
+      <h2>Reset stats</h2>
+      <div class="setting">
+        <p>Delete your whole answer history: every attempt, streak and accuracy figure. The questions stay, so you can start drilling again from zero.</p>
+        <button class="danger" id="btn-reset-stats">Reset all stats</button>
+      </div>
+
+      <h2>Remove modules</h2>
+      <p class="muted">Removing a module deletes its questions, figures and answer history. You can bring the questions back by importing the PDF again, but the history is gone for good.</p>
+      <table class="grid" id="module-table">
+        <thead><tr><th>Module</th><th class="num">Questions</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+
+      <h2>Hard reset</h2>
+      <div class="setting">
+        <p>Delete everything: all modules, questions, figures and answer history. The app will be as it was on first launch.</p>
+        <button class="danger" id="btn-hard-reset">Hard reset</button>
+      </div>
+    </section>
   </main>
+
+  <!-- Confirmation for destructive actions -->
+  <dialog id="confirm">
+    <p id="confirm-msg"></p>
+    <div class="dialog-actions">
+      <button value="cancel" class="cancel">Cancel</button>
+      <button value="ok" class="danger" id="confirm-ok"></button>
+    </div>
+  </dialog>
 
   <!-- Per-question history -->
   <dialog id="history">

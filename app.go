@@ -152,6 +152,43 @@ func (a *App) GetTopics() ([]store.Topic, error) {
 	return s.Topics()
 }
 
+// ListQuestions returns every question for the Questions view. Full details
+// (choices, answer) are fetched per question with GetQuestionHistory.
+func (a *App) ListQuestions() ([]store.QuestionSummary, error) {
+	s, err := a.db()
+	if err != nil {
+		return nil, err
+	}
+	return s.ListQuestions()
+}
+
+// ResetStats deletes all answer history but keeps the questions.
+func (a *App) ResetStats() error {
+	s, err := a.db()
+	if err != nil {
+		return err
+	}
+	return s.ResetStats()
+}
+
+// RemoveModule deletes one module's questions, figures and history.
+func (a *App) RemoveModule(module string) (int, error) {
+	s, err := a.db()
+	if err != nil {
+		return 0, err
+	}
+	return s.RemoveModule(module)
+}
+
+// HardReset deletes every question, figure and attempt.
+func (a *App) HardReset() error {
+	s, err := a.db()
+	if err != nil {
+		return err
+	}
+	return s.HardReset()
+}
+
 // QuestionHistory is one question in full plus every attempt at it.
 type QuestionHistory struct {
 	Question store.Question  `json:"question"`

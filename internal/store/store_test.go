@@ -54,6 +54,47 @@ func TestReimportKeepsHistory(t *testing.T) {
 	}
 }
 
+func TestResetAndRemove(t *testing.T) {
+	s := openTest(t)
+	a, b := sample("a", "T1", "a"), sample("b", "T2", "b")
+	b.Module = "Module 2: Other"
+	a.Image = &Figure{Mime: "image/png", Data: []byte{1, 2, 3}}
+	s.UpsertQuestions([]Question{a, b})
+	all, _ := s.Candidates("all", "", "")
+	for _, c := range all {
+		s.RecordAttempt(c.ID, "A", true, time.Now())
+	}
+	count := func(table string) (n int) {
+		s.db.QueryRow(`SELECT COUNT(*) FROM ` + table).Scan(&n)
+		return n
+	}
+
+	if err := s.ResetStats(); err != nil || count("attempts") != 0 || count("questions") != 2 {
+		t.Fatalf("ResetStats: err=%v attempts=%d questions=%d", err, count("attempts"), count("questions"))
+	}
+
+	for _, c := range all {
+		s.RecordAttempt(c.ID, "A", true, time.Now())
+	}
+	n, err := s.RemoveModule("Module 1: Test")
+	if err != nil || n != 1 {
+		t.Fatalf("RemoveModule: n=%d err=%v", n, err)
+	}
+	if count("questions") != 1 || count("attempts") != 1 || count("figures") != 0 || count("choices") != 2 {
+		t.Errorf("RemoveModule left questions=%d attempts=%d figures=%d choices=%d",
+			count("questions"), count("attempts"), count("figures"), count("choices"))
+	}
+
+	if err := s.HardReset(); err != nil {
+		t.Fatal(err)
+	}
+	for _, table := range []string{"questions", "choices", "attempts", "figures"} {
+		if n := count(table); n != 0 {
+			t.Errorf("HardReset left %d rows in %s", n, table)
+		}
+	}
+}
+
 func TestMissedAndStats(t *testing.T) {
 	s := openTest(t)
 	s.UpsertQuestions([]Question{sample("a", "T1", "a"), sample("b", "T1", "b"), sample("c", "T2", "c")})
