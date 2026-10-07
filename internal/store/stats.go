@@ -5,7 +5,7 @@ package store
 type Stats struct {
 	TotalQuestions int          `json:"totalQuestions"`
 	SeenQuestions  int          `json:"seenQuestions"`
-	MissedNow      int          `json:"missedNow"` // most recent attempt wrong
+	MissedNow      int          `json:"missedNow"` // wrong within the last MissedWindow attempts
 	Attempts       int          `json:"attempts"`
 	Correct        int          `json:"correct"`
 	CurrentStreak  int          `json:"currentStreak"`
@@ -54,8 +54,7 @@ func (s *Store) Stats() (Stats, error) {
 			(SELECT COUNT(DISTINCT question_id) FROM attempts),
 			(SELECT COUNT(*) FROM attempts),
 			(SELECT COALESCE(SUM(correct), 0) FROM attempts),
-			(SELECT COUNT(*) FROM questions q WHERE
-				(SELECT correct FROM attempts WHERE question_id = q.id ORDER BY id DESC LIMIT 1) = 0)`).
+			(SELECT COUNT(*) FROM questions q WHERE `+missedSQL+`)`).
 		Scan(&st.TotalQuestions, &st.SeenQuestions, &st.Attempts, &st.Correct, &st.MissedNow)
 	if err != nil {
 		return st, err

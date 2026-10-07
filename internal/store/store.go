@@ -217,9 +217,22 @@ type Candidate struct {
 	Attempts int
 }
 
-// Candidates returns questions matching the filter. mode is "all", "missed"
-// (most recent attempt was wrong) or "topic". module and topic narrow the set
-// when non-empty.
+// MissedWindow is how many of a question's most recent attempts count toward
+// "missed": a question is missed if any of them was wrong, so it stays in the
+// missed drill until it has been answered correctly this many times in a row.
+const MissedWindow = 10
+
+// missedSQL is true for the question aliased q when any of its last
+// MissedWindow attempts was wrong. The cutoff is the id of its
+// MissedWindow-th most recent attempt (0 if it has fewer).
+var missedSQL = fmt.Sprintf(`EXISTS (
+	SELECT 1 FROM attempts w
+	WHERE w.question_id = q.id AND w.correct = 0
+	AND w.id >= COALESCE((SELECT id FROM attempts WHERE question_id = q.id
+		ORDER BY id DESC LIMIT 1 OFFSET %d), 0))`, MissedWindow-1)
+
+// Candidates returns questions matching the filter. mode is "all" or
+// "missed" (see MissedWindow). module and topic narrow the set when non-empty.
 func (s *Store) Candidates(mode, module, topic string) ([]Candidate, error) {
 	query := `
 		SELECT q.id, COUNT(a.id)
@@ -227,8 +240,7 @@ func (s *Store) Candidates(mode, module, topic string) ([]Candidate, error) {
 		LEFT JOIN attempts a ON a.question_id = q.id
 		WHERE (? = '' OR q.module = ?) AND (? = '' OR q.topic = ?)`
 	if mode == "missed" {
-		query += `
-		AND (SELECT correct FROM attempts WHERE question_id = q.id ORDER BY id DESC LIMIT 1) = 0`
+		query += ` AND ` + missedSQL
 	}
 	query += ` GROUP BY q.id`
 

@@ -26,7 +26,7 @@ If `wails build` complains about npm, add `-s` to skip the (empty) frontend buil
 2. Answer questions in the **Study** tab. You can filter by All / Missed only, module, and topic. Keyboard shortcuts: `A`–`D` or `T`/`F` choose an answer, and `Enter` submits or moves to the next question.
 3. The **Stats** tab shows overall accuracy, accuracy by module and topic, the most-missed questions (click one to see its full history), and accuracy by day.
 
-"Missed" means your **most recent** answer to that question was wrong. Answering it correctly takes it off the missed list.
+"Missed" means you got that question wrong at least once in your **last 10 attempts** at it. It stays on the missed list until you've answered it correctly 10 times in a row (`MissedWindow` in `internal/store/store.go`).
 
 ## How import works
 

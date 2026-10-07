@@ -99,17 +99,33 @@ func TestMissedAndStats(t *testing.T) {
 	s := openTest(t)
 	s.UpsertQuestions([]Question{sample("a", "T1", "a"), sample("b", "T1", "b"), sample("c", "T2", "c")})
 	all, _ := s.Candidates("all", "", "")
-	a, b := all[0].ID, all[1].ID
+	a, b, c := all[0].ID, all[1].ID, all[2].ID
 	now := time.Now()
+	missedIDs := func() map[int64]bool {
+		m := map[int64]bool{}
+		cands, _ := s.Candidates("missed", "", "")
+		for _, x := range cands {
+			m[x.ID] = true
+		}
+		return m
+	}
 
 	s.RecordAttempt(a, "B", false, now) // a: wrong
-	s.RecordAttempt(b, "B", false, now) // b: wrong, then right
+	s.RecordAttempt(b, "B", false, now) // b: wrong, then right: still missed
 	s.RecordAttempt(b, "A", true, now)
-
-	missed, _ := s.Candidates("missed", "", "")
-	if len(missed) != 1 || missed[0].ID != a {
-		t.Errorf("missed = %+v, want only question a", missed)
+	s.RecordAttempt(c, "B", false, now) // c: wrong, then right MissedWindow-1 times
+	for range MissedWindow - 1 {
+		s.RecordAttempt(c, "A", true, now)
 	}
+	if m := missedIDs(); len(m) != 3 {
+		t.Errorf("missed = %v, want a, b and c (c's miss is still inside the window)", m)
+	}
+
+	s.RecordAttempt(c, "A", true, now) // c's miss now falls outside the window
+	if m := missedIDs(); len(m) != 2 || !m[a] || !m[b] {
+		t.Errorf("missed = %v, want only a and b", m)
+	}
+
 	topic, _ := s.Candidates("all", "", "T2")
 	if len(topic) != 1 {
 		t.Errorf("topic filter returned %d, want 1", len(topic))
@@ -119,13 +135,15 @@ func TestMissedAndStats(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if st.TotalQuestions != 3 || st.SeenQuestions != 2 || st.Attempts != 3 || st.Correct != 1 || st.MissedNow != 1 {
+	wantAttempts := 3 + 1 + MissedWindow
+	if st.TotalQuestions != 3 || st.SeenQuestions != 3 || st.Attempts != wantAttempts ||
+		st.Correct != 1+MissedWindow || st.MissedNow != 2 {
 		t.Errorf("stats = %+v", st)
 	}
-	if st.CurrentStreak != 1 || st.BestStreak != 1 {
-		t.Errorf("streaks = %d/%d, want 1/1", st.CurrentStreak, st.BestStreak)
+	if st.CurrentStreak != MissedWindow || st.BestStreak != MissedWindow {
+		t.Errorf("streaks = %d/%d, want %d/%d", st.CurrentStreak, st.BestStreak, MissedWindow, MissedWindow)
 	}
-	if len(st.MostMissed) != 2 || len(st.Topics) != 2 || len(st.Daily) != 1 {
+	if len(st.MostMissed) != 3 || len(st.Topics) != 2 || len(st.Daily) != 1 {
 		t.Errorf("mostMissed=%d topics=%d daily=%d", len(st.MostMissed), len(st.Topics), len(st.Daily))
 	}
 }

@@ -248,7 +248,7 @@ async function nextQuestion() {
       empty.innerHTML = `No questions yet. <a href="#" id="go-import">Import the question bank</a> to get started.`;
       $("#go-import").onclick = (e) => { e.preventDefault(); showView("import"); };
     } else if (filter().mode === "missed") {
-      empty.textContent = "Nothing missed in this selection. Every question here was answered correctly on its most recent attempt.";
+      empty.textContent = "Nothing missed in this selection. Every question here was answered correctly on each of its last 10 attempts.";
     } else {
       empty.textContent = "No questions match this filter.";
     }
